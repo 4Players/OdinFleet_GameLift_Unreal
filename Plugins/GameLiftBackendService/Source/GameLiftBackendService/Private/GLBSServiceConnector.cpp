@@ -6,15 +6,42 @@
 #include "GameLiftExeptions.h"
 
 
-void UGLBSServiceConnector::GetSessions(FSearchComplete OnReady)
-{	
+
+TSharedRef<IHttpRequest, ESPMode::ThreadSafe> UGLBSServiceConnector::GetPostRequest(const FString& Endpoint, const TSharedPtr<FJsonObject>& JsonData)
+{
 	TFunction<void(const FJsonObject& Result, const FString& Error)> Done;
 	FHttpModule& Module= FHttpModule::Get();
 	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Module.CreateRequest();
+	Request->SetURL(Endpoint);
+    Request->SetVerb("POST");
+    Request->SetHeader("Content-Type", "application/json");
 
-	Request->SetURL("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftSearchSessions");
+	// Convert to string
+	FString RequestBody;
+	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
+	FJsonSerializer::Serialize(JsonData.ToSharedRef(), Writer);
+
+	Request->SetContentAsString(RequestBody);
+	return Request;
+}
+TSharedRef<IHttpRequest, ESPMode::ThreadSafe> UGLBSServiceConnector::GetGetRequest(const FString& Endpoint)
+{
+	TFunction<void(const FJsonObject& Result, const FString& Error)> Done;
+	FHttpModule& Module= FHttpModule::Get();
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Module.CreateRequest();
+	
+	Request->SetURL(Endpoint);
 	Request->SetVerb("GET");
 	Request->SetHeader("Content-Type", "application/json");
+	return Request;
+}
+
+
+void UGLBSServiceConnector::GetSessions(FSearchComplete OnReady)
+{	
+
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetGetRequest("<your-endpoint>");
+
 
 	Request->OnProcessRequestComplete().BindLambda([OnReady](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 	{
@@ -54,26 +81,11 @@ void UGLBSServiceConnector::GetSessions(FSearchComplete OnReady)
 
 void UGLBSServiceConnector::CreateGameSession(FSingleGameSessionResult OnCreated,FString CreatorId,FString GameSessionName)
 {
-	TFunction<void(const FJsonObject& Result, const FString& Error)> Done;
-	FHttpModule& Module= FHttpModule::Get();
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Module.CreateRequest();
-
-	Request->SetURL("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftCreateGameSession");
-	
-	Request->SetVerb("POST");
-	Request->SetHeader("Content-Type", "application/json");
-
 	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
 	JsonData->SetStringField(TEXT("CreatorId"),CreatorId);
 	JsonData->SetStringField(TEXT("SessionName"),GameSessionName);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
 	
-
-	// Convert to string
-	FString RequestBody;
-	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
-	FJsonSerializer::Serialize(JsonData.ToSharedRef(), Writer);
-
-	Request->SetContentAsString(RequestBody);
 	
 	Request->OnProcessRequestComplete().BindLambda([OnCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 	{
@@ -107,27 +119,50 @@ void UGLBSServiceConnector::CreateGameSession(FSingleGameSessionResult OnCreated
 	Request->ProcessRequest();
 }
 
+void UGLBSServiceConnector::QueueGameSession(FSingleGameSessionResult OnCreated, FString GameSessionName,
+	FString PlacementId)
+{
+
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	JsonData->SetStringField(TEXT("SessionName"),GameSessionName);
+	JsonData->SetStringField(TEXT("PlacementId"),PlacementId);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	
+	Request->OnProcessRequestComplete().BindLambda([OnCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
+	{
+		const FString ResponseString = Response->GetContentAsString();
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseString);
+		TSharedPtr<FJsonObject> Json;
+		if (!FJsonSerializer::Deserialize(Reader,Json) || !Json.IsValid())
+		{
+			FGameSessionData data;
+			OnCreated.Execute(data,true,EGameLiftExceptionsBP::Exception);
+			return;
+		}
+		if (Json->HasField(FString(TEXT("GameSession"))))
+		{
+			FGameSessionData data;
+			TSharedPtr<FJsonObject> GameSession = Json->GetObjectField(FString(TEXT("GameSession")));
+			if (GameSession->HasField(FString(TEXT("GameSession"))))
+			{
+				TSharedPtr<FJsonValue> GameSessionsJson = GameSession->GetField(FString(TEXT("GameSessions")),EJson::Object);
+				data = CreateGameSessionFromJson(GameSessionsJson);
+			}
+			OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
+			return;
+		}
+		FGameSessionData data;
+		OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
+	});
+	Request->ProcessRequest();
+}
+
 void UGLBSServiceConnector::CloseGameSession(FSingleGameSessionResult OnClosed,FString GameSessionId)
 {
-	TFunction<void(const FJsonObject& Result, const FString& Error)> Done;
-	FHttpModule& Module= FHttpModule::Get();
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = Module.CreateRequest();
-
-	Request->SetURL("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftCloseGameSession");
-	Request->SetVerb("POST");
-	Request->SetHeader("Content-Type", "application/json");
-
-	
 	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
 	JsonData->SetStringField(TEXT("GameSessionId"),GameSessionId);
 	
-
-	// Convert to string
-	FString RequestBody;
-	TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
-	FJsonSerializer::Serialize(JsonData.ToSharedRef(), Writer);
-
-	Request->SetContentAsString(RequestBody);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
 	
 	Request->OnProcessRequestComplete().BindLambda([OnClosed](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 	{
@@ -156,6 +191,44 @@ void UGLBSServiceConnector::CloseGameSession(FSingleGameSessionResult OnClosed,F
 		OnClosed.Execute(data,false,EGameLiftExceptionsBP::None);
 	});
 	Request->ProcessRequest();
+}
+
+void UGLBSServiceConnector::GetPlayerSession(FPlayerSessionResult OnCreated, FString GameSessionId, FString PlayerId)
+{
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	JsonData->SetStringField(TEXT("GameSessionId"),GameSessionId);
+	JsonData->SetStringField(TEXT("PlayerID"),PlayerId);
+	
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+
+	Request->OnProcessRequestComplete().BindLambda([OnCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
+{
+	const FString ResponseString = Response->GetContentAsString();
+	TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseString);
+	TSharedPtr<FJsonObject> Json;
+	if (!FJsonSerializer::Deserialize(Reader,Json) || !Json.IsValid())
+	{
+		FPlayerSessionData data;
+		OnCreated.Execute(data,true,EGameLiftExceptionsBP::Exception);
+		return;
+	}
+	if (Json->HasField(FString(TEXT("GameSession"))))
+	{
+		FPlayerSessionData data;
+		TSharedPtr<FJsonObject> GameSession = Json->GetObjectField(FString(TEXT("GameSession")));
+		if (GameSession->HasField(FString(TEXT("GameSession"))))
+		{
+			TSharedPtr<FJsonValue> GameSessionsJson = GameSession->GetField(FString(TEXT("GameSessions")),EJson::Object);
+			data = CreatePlayerSessionFromJson(GameSessionsJson);
+		}
+		OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
+		return;
+	}
+	FPlayerSessionData data;
+	OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
+});
+	Request->ProcessRequest();
+	
 }
 
 FGameSessionData UGLBSServiceConnector::CreateGameSessionFromJson(TSharedPtr<FJsonValue> GameSessionJson)
@@ -282,3 +355,5 @@ FPlayerSessionData UGLBSServiceConnector::CreatePlayerSessionFromJson(TSharedPtr
 	
 	return data;
 }
+
+

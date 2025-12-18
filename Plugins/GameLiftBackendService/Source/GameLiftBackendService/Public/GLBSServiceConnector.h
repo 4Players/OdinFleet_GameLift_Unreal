@@ -95,11 +95,20 @@ public:
 	static void CreateGameSession(FSingleGameSessionResult OnCreated,FString CreatorId,FString GameSessionName);
 
 	UFUNCTION(BlueprintCallable, Category = "GLBS")
+	static void QueueGameSession(FSingleGameSessionResult OnCreated,FString GameSessionName,FString PlacementId);
+
+	UFUNCTION(BlueprintCallable, Category = "GLBS")
 	static void CloseGameSession(FSingleGameSessionResult OnCreated,FString GameSessionId);
+
+	UFUNCTION(BlueprintCallable, Category = "GLBS")
+	static void GetPlayerSession(FPlayerSessionResult OnCreated, FString GameSessionId, FString PlayerId);
 	
 private:
 	TWeakObjectPtr<UWorld> WorldPtr;
 
 	static FGameSessionData CreateGameSessionFromJson(TSharedPtr<FJsonValue> GameSessionJson);
 	static FPlayerSessionData CreatePlayerSessionFromJson(TSharedPtr<FJsonValue> PlayerSessionJson);
+
+	static TSharedRef<IHttpRequest, ESPMode::ThreadSafe> GetPostRequest(const FString& Endpoint, const TSharedPtr<FJsonObject>& JsonData);
+	static TSharedRef<IHttpRequest, ESPMode::ThreadSafe> GetGetRequest(const FString& Endpoint);
 };
