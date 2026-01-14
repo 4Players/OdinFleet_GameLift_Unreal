@@ -2,6 +2,9 @@
 
 #include "OdinFleetGameMode.h"
 
+#include "OdinFleetPlayerController.h"
+#include "Kismet/GameplayStatics.h"
+
 #if WITH_GAMELIFT
 #include "GameLiftServerSDK.h"
 #endif
@@ -20,6 +23,49 @@ void AOdinFleetGameMode::BeginPlay()
 #if WITH_GAMELIFT
 	InitGameLift();
 	#endif
+}
+
+FString AOdinFleetGameMode::InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId,
+	const FString& Options, const FString& Portal)
+{
+#if WITH_GAMELIFT
+	const FString PlayerSessionId = UGameplayStatics::ParseOption(Options,TEXT("PlayerSessionId"));
+	if (PlayerSessionId.IsEmpty())
+	{
+		return TEXT("Missing PlayerSessionId");
+	}
+	auto Result = Aws::GameLift::Server::AcceptPlayerSession(TCHAR_TO_UTF8(*PlayerSessionId));
+
+	if (!Result.IsSuccess())
+	{
+		return TEXT("Player Session Accept Failed");
+	}
+	Cast<AOdinFleetPlayerController>(NewPlayerController)->PlayerSessionId = PlayerSessionId;
+#endif
+	return Super::InitNewPlayer(NewPlayerController, UniqueId, Options, Portal);
+}
+
+void AOdinFleetGameMode::Logout(AController* Exiting)
+{
+#if WITH_GAMELIFT
+	const FString PlayerSessionId = Cast<AOdinFleetPlayerController>(Exiting)->PlayerSessionId;
+	if (PlayerSessionId.IsEmpty())
+	{
+		UE_LOG(LogTemp, Display, TEXT("Player Session Id is Empty"));
+	}else
+	{
+		auto Result = Aws::GameLift::Server::RemovePlayerSession(TCHAR_TO_UTF8(*PlayerSessionId));
+		if (!Result.IsSuccess())
+		{
+			UE_LOG(LogTemp, Display, TEXT("Player Session Remove Failed"));
+		}else
+		{
+			Cast<AOdinFleetPlayerController>(Exiting)->PlayerSessionId.Empty();
+		}
+	}	
+#endif
+	
+	Super::Logout(Exiting);
 }
 
 void AOdinFleetGameMode::InitGameLift()

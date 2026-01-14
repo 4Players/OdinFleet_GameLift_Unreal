@@ -119,7 +119,7 @@ void UGLBSServiceConnector::CreateGameSession(FSingleGameSessionResult OnCreated
 	Request->ProcessRequest();
 }
 
-void UGLBSServiceConnector::QueueGameSession(FSingleGameSessionResult OnCreated, FString GameSessionName,
+void UGLBSServiceConnector::QueueGameSession(FSingleSessionPlacementResult OnCreated, FString GameSessionName,
 	FString PlacementId)
 {
 
@@ -135,23 +135,23 @@ void UGLBSServiceConnector::QueueGameSession(FSingleGameSessionResult OnCreated,
 		TSharedPtr<FJsonObject> Json;
 		if (!FJsonSerializer::Deserialize(Reader,Json) || !Json.IsValid())
 		{
-			FGameSessionData data;
+			FSessionPlacementData data;
 			OnCreated.Execute(data,true,EGameLiftExceptionsBP::Exception);
 			return;
 		}
 		if (Json->HasField(FString(TEXT("GameSession"))))
 		{
-			FGameSessionData data;
+			FSessionPlacementData data;
 			TSharedPtr<FJsonObject> GameSession = Json->GetObjectField(FString(TEXT("GameSession")));
 			if (GameSession->HasField(FString(TEXT("GameSession"))))
 			{
 				TSharedPtr<FJsonValue> GameSessionsJson = GameSession->GetField(FString(TEXT("GameSessions")),EJson::Object);
-				data = CreateGameSessionFromJson(GameSessionsJson);
+				data = CreateSessionPlacementDataFromJson(GameSessionsJson);
 			}
 			OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
 			return;
 		}
-		FGameSessionData data;
+		FSessionPlacementData data;
 		OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
 	});
 	Request->ProcessRequest();
@@ -193,6 +193,17 @@ void UGLBSServiceConnector::CloseGameSession(FSingleGameSessionResult OnClosed,F
 	Request->ProcessRequest();
 }
 
+void UGLBSServiceConnector::StopMatchmaking(const FString TicketId)
+{
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	JsonData->SetStringField(TEXT("TickeId"),TicketId);
+	
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	
+	Request->ProcessRequest();
+}
+
+
 void UGLBSServiceConnector::GetPlayerSession(FPlayerSessionResult OnCreated, FString GameSessionId, FString PlayerId)
 {
 	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
@@ -212,13 +223,14 @@ void UGLBSServiceConnector::GetPlayerSession(FPlayerSessionResult OnCreated, FSt
 		OnCreated.Execute(data,true,EGameLiftExceptionsBP::Exception);
 		return;
 	}
-	if (Json->HasField(FString(TEXT("GameSession"))))
+	if (Json->HasField(FString(TEXT("PlayerSession"))))
 	{
 		FPlayerSessionData data;
-		TSharedPtr<FJsonObject> GameSession = Json->GetObjectField(FString(TEXT("GameSession")));
-		if (GameSession->HasField(FString(TEXT("GameSession"))))
-		{
-			TSharedPtr<FJsonValue> GameSessionsJson = GameSession->GetField(FString(TEXT("GameSessions")),EJson::Object);
+		TSharedPtr<FJsonObject> PlayerSession = Json->GetObjectField(FString(TEXT("PlayerSession")));
+
+		if (Json->HasField(FString(TEXT("PlayerSession"))))
+		{			
+			TSharedPtr<FJsonValue> GameSessionsJson = Json->GetField(FString(TEXT("PlayerSession")),EJson::Object);
 			data = CreatePlayerSessionFromJson(GameSessionsJson);
 		}
 		OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
@@ -228,10 +240,144 @@ void UGLBSServiceConnector::GetPlayerSession(FPlayerSessionResult OnCreated, FSt
 	OnCreated.Execute(data,false,EGameLiftExceptionsBP::None);
 });
 	Request->ProcessRequest();
-	
 }
 
-FGameSessionData UGLBSServiceConnector::CreateGameSessionFromJson(TSharedPtr<FJsonValue> GameSessionJson)
+void UGLBSServiceConnector::StartMatchmaking(FMatchMakingTiketResult OnTicketCreated, FString PlayerId,
+	FString GameMode,int32 skillLevel)
+{
+	TSharedPtr<FJsonObject> PlayerData = MakeShared<FJsonObject>();
+	
+	TSharedPtr<FJsonObject> PlayerAttributes = MakeShared<FJsonObject>();
+	
+	const TSharedPtr<FJsonObject> Skill = MakeShared<FJsonObject>();
+	Skill->SetNumberField(TEXT("N"), skillLevel);
+	
+	const TSharedPtr<FJsonObject> GameModeAttr = MakeShared<FJsonObject>();
+	GameModeAttr->SetStringField(TEXT("S"), GameMode);
+	
+	PlayerAttributes->SetObjectField(TEXT("skill"),Skill);
+	PlayerAttributes->SetObjectField(TEXT("gamemode"),GameModeAttr);
+	const TSharedPtr<FJsonObject> Latency = MakeShared<FJsonObject>();
+	Latency->SetNumberField(TEXT("eu-central-1"),12);
+	
+	PlayerData->SetStringField(TEXT("PlayerId"),PlayerId);
+	PlayerData->SetObjectField(TEXT("PlayerAttributes"),PlayerAttributes);
+	PlayerData->SetObjectField(TEXT("Latency"),Latency);
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	
+	TArray<TSharedPtr<FJsonValue>> Players;
+	Players.Add(MakeShared<FJsonValueObject>(PlayerData));
+	JsonData->SetArrayField(TEXT("PlayerData"),Players);
+	JsonData->SetStringField(TEXT("Config"),"NewConfiguration"); /// here you should paste the name of the AWS MAtchmaking Configuration
+	
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	Request->OnProcessRequestComplete().BindLambda([OnTicketCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
+	{
+		const FString ResponseString = Response->GetContentAsString();
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseString);
+		TSharedPtr<FJsonObject> Json;
+		if (!FJsonSerializer::Deserialize(Reader,Json) || !Json.IsValid())/// if no valid JSON is returned
+		{
+			FMatchmakingTicket data;
+			OnTicketCreated.Execute(data,true,EGameLiftExceptionsBP::Exception);
+			return;
+		}
+		if (Json->HasField(FString(TEXT("MatchmakingTicket"))))
+		{
+			FMatchmakingTicket data;
+			TSharedPtr<FJsonValue> GameSessionsJson = Json->GetField(FString(TEXT("MatchmakingTicket")),EJson::Object);
+			data = CreateMatchmakingTicketDataFromJson(GameSessionsJson);
+			OnTicketCreated.Execute(data,false,EGameLiftExceptionsBP::None);
+			return;
+		}
+		FMatchmakingTicket data;
+		OnTicketCreated.Execute(data,false,EGameLiftExceptionsBP::None);
+	});
+	Request->ProcessRequest();
+}
+
+void UGLBSServiceConnector::CheckMatchmakingTicket(FDescribeMatchmakingResult OnTicketDescribed,
+	TArray<FString> TicketIds)
+{
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	TArray<TSharedPtr<FJsonValue>> Tickets;
+	for (const FString& TicketId : TicketIds)
+	{
+		Tickets.Add(MakeShared<FJsonValueString>(TicketId));
+	}
+	
+	JsonData->SetArrayField(TEXT("TicketIds"),Tickets);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	Request->OnProcessRequestComplete().BindLambda([OnTicketDescribed](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
+	{
+		const FString ResponseString = Response->GetContentAsString();
+		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseString);
+		TSharedPtr<FJsonObject> Json;
+		if (!FJsonSerializer::Deserialize(Reader,Json) || !Json.IsValid())
+		{
+			TArray<FMatchmakingTicketSubscriptionResult> data;
+			OnTicketDescribed.Execute(data,true,EGameLiftExceptionsBP::Exception);
+			return;
+		}
+		if (Json->HasField(FString(TEXT("TicketList"))))
+		{
+			TArray<FMatchmakingTicketSubscriptionResult> data;
+			//TSharedPtr<FJsonValue> GameSessionsJson = Json->GetField(FString(TEXT("TicketList")),EJson::Array);
+			TArray<TSharedPtr<FJsonValue>> Tickets = Json->GetArrayField(TEXT("TicketList"));
+			for (const TSharedPtr<FJsonValue>& TicketId : Tickets)
+			{
+				FMatchmakingTicketSubscriptionResult ticketdata;
+				const TSharedPtr<FJsonObject> ticketObj = TicketId->AsObject();
+				ticketdata.Status = ticketObj->GetStringField(TEXT("Status"));
+
+				TArray<TSharedPtr<FJsonValue>> players = ticketObj->GetArrayField(TEXT("players"));
+				for (const TSharedPtr<FJsonValue>& player : players)
+				{
+					FPlayerData playerData;
+					TSharedPtr<FJsonObject> playerObj = player->AsObject();
+					playerData.PlayerId = playerObj->GetStringField(TEXT("playerId"));
+					if (playerObj->HasField(TEXT("team")))
+					{
+						playerData.Team = playerObj->GetStringField(TEXT("team"));
+					}
+					if (playerObj->HasField(TEXT("playerSessionId")))
+					{
+						playerData.PlayerSessionId = playerObj->GetStringField(TEXT("playerSessionId"));
+					}
+					ticketdata.Player.Add(playerData);
+				}
+				if (ticketObj->HasField(TEXT("acceptanceRequired")))
+				{
+					ticketdata.AcceptanceRequired = ticketObj->GetBoolField(TEXT("acceptanceRequired"));
+				}
+				if (ticketObj->HasField(TEXT("gameSessionArn")))
+				{
+					ticketdata.GameSessionArn = ticketObj->GetStringField(TEXT("gameSessionArn"));
+				}
+				if (ticketObj->HasField(TEXT("ipAddress")))
+				{
+					ticketdata.IpAddress = ticketObj->GetStringField(TEXT("ipAddress"));
+				}
+				if (ticketObj->HasField(TEXT("port")))
+				{
+					ticketdata.Port = ticketObj->GetIntegerField(TEXT("port"));
+				}
+				if (ticketObj->HasField(TEXT("matchId")))
+				{
+					ticketdata.MatchId = ticketObj->GetStringField(TEXT("matchId"));
+				}
+				data.Add(ticketdata);
+			}
+			OnTicketDescribed.Execute(data,false,EGameLiftExceptionsBP::None);
+			return;
+		}
+		TArray<FMatchmakingTicketSubscriptionResult> data;
+		OnTicketDescribed.Execute(data,false,EGameLiftExceptionsBP::None);
+	});
+	Request->ProcessRequest();
+}
+
+FGameSessionData UGLBSServiceConnector::CreateGameSessionFromJson(const TSharedPtr<FJsonValue>& GameSessionJson)
 {
 	FGameSessionData data;
 	TSharedPtr<FJsonObject> obj = GameSessionJson->AsObject();
@@ -249,14 +395,14 @@ FGameSessionData UGLBSServiceConnector::CreateGameSessionFromJson(TSharedPtr<FJs
 	}
 	if (obj->HasField(TEXT("CreationTime")))
 	{
-		FString CreationTime= obj->GetStringField(TEXT("CreationTime"));
+		//FString CreationTime= obj->GetStringField(TEXT("CreationTime"));
 		FDateTime Time;
 		FDateTime::ParseIso8601(*obj->GetStringField(TEXT("CreationTime")),Time);
 		data.CreationTime =Time;
 	}
 	if (obj->HasField(TEXT("TerminationTime")))
 	{
-		FString CreationTime= obj->GetStringField(TEXT("TerminationTime"));
+		//FString CreationTime= obj->GetStringField(TEXT("TerminationTime"));
 		FDateTime Time;
 		FDateTime::ParseIso8601(*obj->GetStringField(TEXT("TerminationTime")),Time);
 		data.TerminationTime =Time;
@@ -299,8 +445,127 @@ FGameSessionData UGLBSServiceConnector::CreateGameSessionFromJson(TSharedPtr<FJs
 	}
 	return data;
 }
+FSessionPlacementData UGLBSServiceConnector::CreateSessionPlacementDataFromJson(const TSharedPtr<FJsonValue>& PlacementDataJson)
+{
+	FSessionPlacementData data;
 
-FPlayerSessionData UGLBSServiceConnector::CreatePlayerSessionFromJson(TSharedPtr<FJsonValue> PlayerSessionJson)
+	TSharedPtr<FJsonObject> obj = PlacementDataJson->AsObject();
+	if (obj->HasField(TEXT("GameSessionName")))
+	{
+		data.GameSessionName =obj->GetStringField(TEXT("GameSessionName"));
+	}
+	if (obj->HasField(TEXT("GameSessionQueueName")))
+	{
+		data.GameSessionQueueName =obj->GetStringField(TEXT("GameSessionQueueName"));
+	}
+	if (obj->HasField(TEXT("MaximalPlayerSessionCount")))
+	{
+		data.MaximumPlayerSessionCount =obj->GetIntegerField(TEXT("MaximalPlayerSessionCount"));
+	}
+	if (obj->HasField(TEXT("PlacementId")))
+	{
+		data.PlacementId =obj->GetStringField(TEXT("PlacementId"));
+	}
+	if (obj->HasField(TEXT("Status")))
+	{
+		data.Status =obj->GetStringField(TEXT("Status"));
+	}
+	if (obj->HasField(TEXT("StartTime")))
+	{
+		FDateTime Time;
+		FDateTime::ParseIso8601(*obj->GetStringField(TEXT("StartTime")),Time);
+		data.StartTime =Time;
+	}
+	return data;
+}
+
+FMatchmakingTicket UGLBSServiceConnector::CreateMatchmakingTicketDataFromJson(
+	const TSharedPtr<FJsonValue>& MatchmakingTicketDataJson)
+{
+	FMatchmakingTicket data;
+	TSharedPtr<FJsonObject> obj = MatchmakingTicketDataJson->AsObject();
+
+	if (obj->HasField(TEXT("TicketId")))
+	{
+		data.TicketId =obj->GetStringField(TEXT("TicketId"));
+	}
+	if (obj->HasField(TEXT("ConfigurationName")))
+	{
+		data.ConfigurationName =obj->GetStringField(TEXT("ConfigurationName"));
+	}
+	if (obj->HasField(TEXT("ConfigurationArn")))
+	{
+		data.ConfigurationArn =obj->GetStringField(TEXT("ConfigurationArn"));
+	}
+	if (obj->HasField(TEXT("Status")))
+	{
+		data.Status =obj->GetStringField(TEXT("Status"));
+	}
+	if (obj->HasField(TEXT("StatusReason")))
+	{
+		data.StatusReason =obj->GetStringField(TEXT("StatusReason"));
+	}
+	if (obj->HasField(TEXT("StatusMessage")))
+	{
+		data.StatusMessage =obj->GetStringField(TEXT("StatusMessage"));
+	}
+	if (obj->HasField(TEXT("StartTime")))
+	{
+		FDateTime Time;
+		FDateTime::ParseIso8601(*obj->GetStringField(TEXT("StartTime")),Time);
+		data.StartTime =Time;
+	}
+	if (obj->HasField(TEXT("EndTime")))
+	{
+		FDateTime Time;
+		FDateTime::ParseIso8601(*obj->GetStringField(TEXT("EndTime")),Time);
+		data.EndTime =Time;
+	}
+
+	if (obj->HasField(TEXT("GameSessionConnectionInfo")))
+	{
+		FGameSessionConnectionInfo connectionInfo;
+		TSharedPtr<FJsonObject> connectionInfoJson = obj->GetObjectField(TEXT("GameSessionConnectionInfo"));
+		if (connectionInfoJson->HasField(TEXT("GameSessionArn")))
+		{
+			connectionInfo.GameSessionArn =connectionInfoJson->GetStringField(TEXT("GameSessionArn"));
+		}
+		if (connectionInfoJson->HasField(TEXT("IpAddress")))
+		{
+			connectionInfo.IPAddress =connectionInfoJson->GetStringField(TEXT("IpAddress"));
+		}
+		if (connectionInfoJson->HasField(TEXT("DnsName")))
+		{
+			connectionInfo.DnsName =connectionInfoJson->GetStringField(TEXT("DnsName"));
+		}
+		if (connectionInfoJson->HasField(TEXT("Port")))
+		{
+			connectionInfo.Port =connectionInfoJson->GetIntegerField(TEXT("Port"));
+		}
+		data.ConnectionInfo = connectionInfo;
+	}
+	return data;
+}
+
+FDescribeMatchmakingTicket UGLBSServiceConnector::CreateMatchmakingTicketsDataFromJson(
+	const TSharedPtr<FJsonObject>& MatchmakingTicketDataJson)
+{
+
+	FDescribeMatchmakingTicket data;
+	TSharedPtr<FJsonObject> obj = MatchmakingTicketDataJson;
+
+	TArray<TSharedPtr<FJsonValue>> Tickets = obj->GetArrayField(TEXT("TicketList"));
+	for (TSharedPtr<FJsonValue> Ticket : Tickets)
+	{
+		data.Tickets.Add(CreateMatchmakingTicketDataFromJson(Ticket));
+	}
+	
+	return data;
+}
+
+
+
+FPlayerSessionData UGLBSServiceConnector::CreatePlayerSessionFromJson(const TSharedPtr<FJsonValue>& PlayerSessionJson)
 {
 	FPlayerSessionData data;
 	TSharedPtr<FJsonObject> obj = PlayerSessionJson->AsObject();

@@ -24,6 +24,8 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual FString InitNewPlayer(APlayerController* NewPlayerController, const FUniqueNetIdRepl& UniqueId, const FString& Options, const FString& Portal = FString()) override;
+	virtual void Logout(AController* Exiting) override;
 
 private:
 	void InitGameLift();

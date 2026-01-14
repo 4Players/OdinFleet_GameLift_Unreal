@@ -23,6 +23,8 @@ public:
 
 	/** Constructor */
 	AOdinFleetPlayerController();
+	UPROPERTY(BlueprintReadOnly)
+	FString PlayerSessionId = FString("");
 
 protected:
 
