@@ -6,6 +6,13 @@ This repository provides a reference implementation for integrating ODIN Fleet i
 
 The Unreal Engine project provides the C++ and Blueprint logic required to connect your game client to a backend coordination layer (Firebase/Node.js), which in turn manages the communication with AWS and ODIN Fleet.
 
+## Accessing Other Versions
+
+Specific versions of this service are available via the following branches and tags:
+
+* **FlexMatch Integration:** Use the `main` branch (tag [`v2-aws-flexmatch-matchmaking`](https://github.com/4Players/OdinFleet_GameLift_Unreal/releases/tag/v2-aws-flexmatch-matchmaking)) for the [FlexMatch Integration guide](https://docs.4players.io/fleet/guides/gamelift-flexmatch/).
+* **GameLift Anywhere Integration:** Use the `aws-gamelift-anywhere` branch (tag [`v1-aws-gamelift-anywhere-guide`](https://github.com/4Players/OdinFleet_GameLift_Unreal/releases/tag/v1-aws-gamelift-anywhere-guide)) for the [Anywhere Integration guide](https://docs.4players.io/fleet/guides/gamelift-anywhere/).
+
 ## Why ODIN Fleet?
 
 ODIN Fleet is the compute device provider in this project because it offers a superior price-performance ratio compared to other providers. It allows you to use the features of GameLift and FlexMatch while running your actual game sessions on ODIN's optimized, low-latency global network.
