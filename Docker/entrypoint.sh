@@ -14,5 +14,6 @@ export AWS_REGION="${AWS_REGION:-$REGION}"
 : "${LOCATION:?Set LOCATION}"
 : "${REGION:?Set REGION}"
 : "${PUBLIC_IP:?Set PUBLIC_IP}"
+export SERVICE_ID="${SERVICE_ID:-$SERVICE_ID}"
 
 exec java -jar /gamelift/agent.jar -c "${COMPUTE_NAME}" -f "${FLEET_ID}" -loc "${LOCATION}" -r "${REGION}" -ip-address "${PUBLIC_IP}"

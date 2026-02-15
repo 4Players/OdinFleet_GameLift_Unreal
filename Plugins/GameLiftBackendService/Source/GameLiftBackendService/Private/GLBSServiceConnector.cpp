@@ -40,7 +40,7 @@ TSharedRef<IHttpRequest, ESPMode::ThreadSafe> UGLBSServiceConnector::GetGetReque
 void UGLBSServiceConnector::GetSessions(FSearchComplete OnReady)
 {	
 
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetGetRequest("<your-endpoint>");
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetGetRequest("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftSearchSessions");
 
 
 	Request->OnProcessRequestComplete().BindLambda([OnReady](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
@@ -84,7 +84,7 @@ void UGLBSServiceConnector::CreateGameSession(FSingleGameSessionResult OnCreated
 	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
 	JsonData->SetStringField(TEXT("CreatorId"),CreatorId);
 	JsonData->SetStringField(TEXT("SessionName"),GameSessionName);
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftCreateGameSession",JsonData);
 	
 	
 	Request->OnProcessRequestComplete().BindLambda([OnCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
@@ -126,10 +126,14 @@ void UGLBSServiceConnector::QueueGameSession(FSingleSessionPlacementResult OnCre
 	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
 	JsonData->SetStringField(TEXT("SessionName"),GameSessionName);
 	JsonData->SetStringField(TEXT("PlacementId"),PlacementId);
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
-	
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftQueueGameSession",JsonData);
+	Request->SetTimeout(240);
 	Request->OnProcessRequestComplete().BindLambda([OnCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 	{
+		if (Response == nullptr)
+		{
+			return;
+		}
 		const FString ResponseString = Response->GetContentAsString();
 		TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseString);
 		TSharedPtr<FJsonObject> Json;
@@ -162,7 +166,7 @@ void UGLBSServiceConnector::CloseGameSession(FSingleGameSessionResult OnClosed,F
 	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
 	JsonData->SetStringField(TEXT("GameSessionId"),GameSessionId);
 	
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftCloseGameSession",JsonData);
 	
 	Request->OnProcessRequestComplete().BindLambda([OnClosed](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 	{
@@ -193,12 +197,15 @@ void UGLBSServiceConnector::CloseGameSession(FSingleGameSessionResult OnClosed,F
 	Request->ProcessRequest();
 }
 
+
+
+
 void UGLBSServiceConnector::StopMatchmaking(const FString TicketId)
 {
 	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
 	JsonData->SetStringField(TEXT("TickeId"),TicketId);
 	
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftStopMatchmaking",JsonData);
 	
 	Request->ProcessRequest();
 }
@@ -210,7 +217,7 @@ void UGLBSServiceConnector::GetPlayerSession(FPlayerSessionResult OnCreated, FSt
 	JsonData->SetStringField(TEXT("GameSessionId"),GameSessionId);
 	JsonData->SetStringField(TEXT("PlayerID"),PlayerId);
 	
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftCreatePlayerSession",JsonData);
 
 	Request->OnProcessRequestComplete().BindLambda([OnCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 {
@@ -270,7 +277,7 @@ void UGLBSServiceConnector::StartMatchmaking(FMatchMakingTiketResult OnTicketCre
 	JsonData->SetArrayField(TEXT("PlayerData"),Players);
 	JsonData->SetStringField(TEXT("Config"),"NewConfiguration"); /// here you should paste the name of the AWS MAtchmaking Configuration
 	
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/StartFlexMatch",JsonData);
 	Request->OnProcessRequestComplete().BindLambda([OnTicketCreated](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 	{
 		const FString ResponseString = Response->GetContentAsString();
@@ -307,7 +314,7 @@ void UGLBSServiceConnector::CheckMatchmakingTicket(FDescribeMatchmakingResult On
 	}
 	
 	JsonData->SetArrayField(TEXT("TicketIds"),Tickets);
-	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("<your-endpoint>",JsonData);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/GameLiftCheckMatchmakingTicket",JsonData);
 	Request->OnProcessRequestComplete().BindLambda([OnTicketDescribed](FHttpRequestPtr, FHttpResponsePtr Response,bool bOK)
 	{
 		const FString ResponseString = Response->GetContentAsString();
@@ -374,6 +381,31 @@ void UGLBSServiceConnector::CheckMatchmakingTicket(FDescribeMatchmakingResult On
 		TArray<FMatchmakingTicketSubscriptionResult> data;
 		OnTicketDescribed.Execute(data,false,EGameLiftExceptionsBP::None);
 	});
+	Request->ProcessRequest();
+}
+
+void UGLBSServiceConnector::SetServerAsActive(FString ServerID)
+{
+
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	JsonData->SetStringField(TEXT("server_id"),ServerID);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/SetServerActive",JsonData);
+	Request->ProcessRequest();
+}
+
+void UGLBSServiceConnector::SetServerAsUsed(FString ServerID)
+{
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	JsonData->SetStringField(TEXT("server_id"),ServerID);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/SetServerUsed",JsonData);
+	Request->ProcessRequest();
+}
+
+void UGLBSServiceConnector::ShutdownServer(FString ServerID)
+{
+	TSharedPtr<FJsonObject> JsonData = MakeShared<FJsonObject>();
+	JsonData->SetStringField(TEXT("server_id"),ServerID);
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> Request = GetPostRequest("https://europe-west3-odinfleettest.cloudfunctions.net/SetServerShutdown",JsonData);
 	Request->ProcessRequest();
 }
 

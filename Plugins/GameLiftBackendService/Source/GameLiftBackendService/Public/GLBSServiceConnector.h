@@ -244,12 +244,26 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "GLBS")
 	static void StopMatchmaking(FString TicketId);
+
+
 	
 	UFUNCTION(BLueprintCallable, Category = "GLBS")
 	static void StartMatchmaking(FMatchMakingTiketResult OnTicketCreated, FString PlayerId, FString GameMode,int32 skillLevel);
 
 	UFUNCTION(BlueprintCallable, Category = "GLBS")
 	static void CheckMatchmakingTicket(FDescribeMatchmakingResult OnTicketDescribed, TArray<FString> TicketIds);
+
+	UFUNCTION(BlueprintCallable, Category = "GLBS")
+	static void SetServerAsActive(FString ServerID);
+
+
+	UFUNCTION(BlueprintCallable, Category = "GLBS")
+	static void SetServerAsUsed(FString ServerID);
+	
+	UFUNCTION(BlueprintCallable, Category = "GLBS")
+	static void ShutdownServer(FString ServerID);
+
+	
 private:
 	TWeakObjectPtr<UWorld> WorldPtr;
 

@@ -2,6 +2,7 @@
 
 #include "OdinFleetGameMode.h"
 
+#include "GLBSServiceConnector.h"
 #include "OdinFleetPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 
@@ -73,7 +74,8 @@ void AOdinFleetGameMode::InitGameLift()
 #if WITH_GAMELIFT
 	UE_LOG(GameServerLog, Log, TEXT("Game Lift initialized"));
 	FGameLiftServerSDKModule* GameLiftServerSdkModule = &FModuleManager::LoadModuleChecked<FGameLiftServerSDKModule>(FName("GameLiftServerSDK"));
-
+	Service_Id = FPlatformMisc::GetEnvironmentVariable(TEXT("SERVICE_ID"));
+	
 	FServerParameters ServerParameters;
 	bool bIsAnywhereActive = false;
 	if (FParse::Param(FCommandLine::Get(), TEXT("glAnywhere")))
@@ -171,11 +173,13 @@ void AOdinFleetGameMode::InitGameLift()
 	}
 	ProcessParameters = MakeShared<FProcessParameters>();
 
-	ProcessParameters->OnStartGameSession.BindLambda([=](Aws::GameLift::Server::Model::GameSession InGameSession)
+	ProcessParameters->OnStartGameSession.BindLambda([=,this](Aws::GameLift::Server::Model::GameSession InGameSession)
 	{
+		
 		FString GameSessionId = FString(InGameSession.GetGameSessionId());
 		UE_LOG(GameServerLog, Log, TEXT("GameSession Initializing: %s"), *GameSessionId);
 		GameLiftServerSdkModule->ActivateGameSession();
+		UGLBSServiceConnector::SetServerAsUsed(this->Service_Id);
 	});
 	ProcessParameters->OnUpdateGameSession.BindLambda([=](Aws::GameLift::Server::Model::UpdateGameSession InGameSession)
 	{
@@ -184,7 +188,7 @@ void AOdinFleetGameMode::InitGameLift()
 		Aws::GameLift::Server::Model::GameSession r = InGameSession.GetGameSession();
 		return;
 	});
-	ProcessParameters->OnTerminate.BindLambda([=]()
+	ProcessParameters->OnTerminate.BindLambda([=,this]()
 	{
 		UE_LOG(GameServerLog, Log, TEXT("Game Server Process is terminating"));
 		FGameLiftGenericOutcome processEndingOutcome = GameLiftServerSdkModule->ProcessEnding();
@@ -193,7 +197,8 @@ void AOdinFleetGameMode::InitGameLift()
 		if (processEndingOutcome.IsSuccess() && destroyOutcome.IsSuccess())
 		{
 			UE_LOG(GameServerLog, Log, TEXT("Server process ending successfully"));
-			FGenericPlatformMisc::RequestExit(false);
+			UGLBSServiceConnector::ShutdownServer(this->Service_Id);
+			//FGenericPlatformMisc::RequestExit(false);
 		}else{
 			if (!processEndingOutcome.IsSuccess()) {
 				const FGameLiftError& error = processEndingOutcome.GetError();
@@ -263,6 +268,7 @@ void AOdinFleetGameMode::InitGameLift()
 		UE_LOG(GameServerLog, SetColor, TEXT("%s"), COLOR_GREEN);
 		UE_LOG(GameServerLog, Log, TEXT("Process Ready!"));
 		UE_LOG(GameServerLog, SetColor, TEXT("%s"), COLOR_NONE);
+		UGLBSServiceConnector::SetServerAsActive(Service_Id);
 	}
 	else
 	{

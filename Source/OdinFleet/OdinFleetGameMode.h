@@ -30,6 +30,8 @@ protected:
 private:
 	void InitGameLift();
 
+	FString Service_Id;
+
 private:
 	TSharedPtr<FProcessParameters> ProcessParameters;
 };
