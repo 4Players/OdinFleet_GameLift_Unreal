@@ -10,8 +10,9 @@ The Unreal Engine project provides the C++ and Blueprint logic required to conne
 
 Specific versions are available via the following branches and tags:
 
-* **FlexMatch Integration:** Use the `main` branch (tag [`v2-aws-flexmatch-matchmaking`](https://github.com/4Players/OdinFleet_GameLift_Unreal/releases/tag/v2-aws-flexmatch-matchmaking)) for the [FlexMatch Integration guide](https://docs.4players.io/fleet/guides/gamelift-flexmatch/).
-* **GameLift Anywhere Integration:** Use the `aws-gamelift-anywhere` branch (tag [`v1-aws-gamelift-anywhere-guide`](https://github.com/4Players/OdinFleet_GameLift_Unreal/releases/tag/v1-aws-gamelift-anywhere-guide)) for the [Anywhere Integration guide](https://docs.4players.io/fleet/guides/gamelift-anywhere/).
+* **Autoscaler Integration:** Use the `aws-autoscaler` branch for the [ODIN Fleet Autoscaler guide](https://docs.4players.io/fleet/guides/autoscaler/).
+* **FlexMatch Integration:** Use the `aws-flexmatch-matchmaking` branch for the [FlexMatch Integration guide](https://docs.4players.io/fleet/guides/gamelift-flexmatch/).
+* **GameLift Anywhere Integration:** Use the `aws-gamelift-anywhere` branch for the [Anywhere Integration guide](https://docs.4players.io/fleet/guides/gamelift-anywhere/).
 
 ## Why ODIN Fleet?
 
@@ -24,3 +25,4 @@ For detailed guides on setting up the AWS environment and configuring your ODIN 
 - [More Information on ODIN Fleet](https://docs.4players.io/fleet/)
 - [ODIN Fleet and AWS GameLift Anywhere integration guide](https://docs.4players.io/fleet/guides/gamelift-anywhere/)
 - [ODIN Fleet and FlexMatch integration guide](https://docs.4players.io/fleet/guides/gamelift-flexmatch/)
+- [ODIN Fleet and Autoscaler integration guide](https://docs.4players.io/fleet/guides/autoscaler/)
